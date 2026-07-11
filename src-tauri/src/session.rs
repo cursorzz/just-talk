@@ -14,10 +14,12 @@ use tokio_tungstenite::{
     connect_async,
     tungstenite::{Message, client::IntoClientRequest},
 };
+use uuid::Uuid;
 
 use crate::{
     audio::AudioCapture,
     config::{AppConfig, HotkeyMode},
+    media::PauseToken,
     protocol::{self, ServerMessage},
 };
 
@@ -60,8 +62,10 @@ enum Control {
 }
 
 pub struct ActiveSession {
+    id: Uuid,
     audio: AudioCapture,
     control: mpsc::UnboundedSender<Control>,
+    media: Option<PauseToken>,
 }
 
 #[derive(Default)]
@@ -90,14 +94,28 @@ impl SessionManager {
                 ..Default::default()
             },
         );
+        let media = config
+            .pause_media_during_recording
+            .then(PauseToken::pause_current)
+            .flatten();
         let (audio_tx, audio_rx) = mpsc::unbounded_channel();
-        let audio = AudioCapture::start(audio_tx).inspect_err(|error| {
-            self.fail(&app, error.clone());
-        })?;
+        let audio = match AudioCapture::start(audio_tx) {
+            Ok(audio) => audio,
+            Err(error) => {
+                if let Some(media) = media {
+                    media.resume();
+                }
+                self.fail(&app, error.clone());
+                return Err(error);
+            }
+        };
         let (control_tx, control_rx) = mpsc::unbounded_channel();
+        let session_id = Uuid::new_v4();
         *self.active.lock() = Some(ActiveSession {
+            id: session_id,
             audio,
             control: control_tx,
+            media,
         });
         let state = self.snapshot.clone();
         let active = self.active.clone();
@@ -113,8 +131,17 @@ impl SessionManager {
                 *state.lock() = value.clone();
                 let _ = app.emit("session-update", value);
             }
-            if let Some(session) = active.lock().take() {
+            let session = {
+                let mut active = active.lock();
+                (active.as_ref().map(|session| session.id) == Some(session_id))
+                    .then(|| active.take())
+                    .flatten()
+            };
+            if let Some(session) = session {
                 session.audio.stop();
+                if let Some(media) = session.media {
+                    media.resume();
+                }
             }
         });
         Ok(())
@@ -130,6 +157,14 @@ impl SessionManager {
         let mut value = self.snapshot.lock().clone();
         value.phase = Phase::Processing;
         self.update(app, value);
+        if let Some(media) = self
+            .active
+            .lock()
+            .as_mut()
+            .and_then(|session| session.media.take())
+        {
+            media.resume();
+        }
         let active_session = self.active.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(DELAYED_STOP).await;
@@ -147,6 +182,9 @@ impl SessionManager {
             return Ok(());
         };
         active.audio.stop();
+        if let Some(media) = active.media {
+            media.resume();
+        }
         active
             .control
             .send(Control::Cancel)

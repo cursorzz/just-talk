@@ -24,6 +24,7 @@ pub struct AppConfig {
     pub enable_ddc: bool,
     pub hotwords: String,
     pub debug_enabled: bool,
+    pub pause_media_during_recording: bool,
 }
 
 impl Default for AppConfig {
@@ -40,6 +41,7 @@ impl Default for AppConfig {
             enable_ddc: false,
             hotwords: String::new(),
             debug_enabled: false,
+            pause_media_during_recording: true,
         }
     }
 }

@@ -14,6 +14,7 @@ type AppConfig = {
   enable_ddc: boolean;
   hotwords: string;
   debug_enabled: boolean;
+  pause_media_during_recording: boolean;
 };
 
 type DebugEntry = {
@@ -50,6 +51,7 @@ const defaults: AppConfig = {
   enable_ddc: false,
   hotwords: "",
   debug_enabled: false,
+  pause_media_during_recording: true,
 };
 
 document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
@@ -139,6 +141,7 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
             <label><input id="enable-ddc" type="checkbox" /><span>语义顺滑</span></label>
             <label><input id="use-gzip" type="checkbox" /><span>压缩传输</span></label>
             <label><input id="debug-enabled" type="checkbox" /><span>调试模式</span></label>
+            <label><input id="pause-media" type="checkbox" /><span>录音时暂停媒体</span></label>
           </div>
           <p class="field-status auto-save-status" id="advanced-status" role="status" aria-live="polite"></p>
         </div>
@@ -210,6 +213,7 @@ function immediateConfigFromForm(): AppConfig {
     enable_ddc: input("enable-ddc").checked,
     hotwords: textarea("hotwords").value,
     debug_enabled: input("debug-enabled").checked,
+    pause_media_during_recording: input("pause-media").checked,
   };
 }
 
@@ -257,6 +261,7 @@ function fillForm(value: AppConfig) {
   input("enable-ddc").checked = value.enable_ddc;
   textarea("hotwords").value = value.hotwords;
   input("debug-enabled").checked = value.debug_enabled;
+  input("pause-media").checked = value.pause_media_during_recording;
   $("debug-panel").toggleAttribute("hidden", !value.debug_enabled);
 }
 

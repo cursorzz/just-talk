@@ -1,5 +1,6 @@
 mod audio;
 mod config;
+mod media;
 mod permissions;
 mod protocol;
 mod session;
