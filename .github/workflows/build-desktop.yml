@@ -1,13 +1,22 @@
-name: Build desktop installers
+name: Build and release desktop installers
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag matching the app version, for example v0.1.0
+        required: true
+        type: string
   push:
     tags:
       - "v*"
 
 permissions:
   contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -78,3 +87,80 @@ jobs:
           args: ${{ matrix.args }}
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: justtalk-[platform]-[arch]-[bundle]
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Validate release tag and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          tauri_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          cargo_version="$(awk '
+            /^\[package\]$/ { in_package=1; next }
+            /^\[/ { in_package=0 }
+            in_package && /^version = / { gsub(/[\" ]/, "", $3); print $3; exit }
+          ' src-tauri/Cargo.toml)"
+          if [[ "$package_version" != "$tauri_version" || "$package_version" != "$cargo_version" ]]; then
+            echo "Version mismatch: package=$package_version tauri=$tauri_version cargo=$cargo_version" >&2
+            exit 1
+          fi
+          expected_tag="v$package_version"
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Release tag $RELEASE_TAG does not match package version $expected_tag" >&2
+            exit 1
+          fi
+
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: justtalk-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Prepare release assets and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-files
+          while IFS= read -r -d '' file; do
+            cp "$file" "release-files/$(basename "$file")"
+          done < <(find release-assets -type f \( \
+            -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \
+          \) -print0)
+          if ! find release-files -type f -mindepth 1 -print -quit | grep -q .; then
+            echo "No release installers were downloaded" >&2
+            exit 1
+          fi
+          (
+            cd release-files
+            sha256sum -- * > SHA256SUMS.txt
+          )
+          find release-files -maxdepth 1 -type f -print
+
+      - name: Create or update GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' assets < <(find release-files -maxdepth 1 -type f -print0)
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "JustTalk $RELEASE_TAG" \
+              --generate-notes
+          fi

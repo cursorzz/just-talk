@@ -75,4 +75,5 @@
 - macOS 发布前重点验证 12、13、14、15.3 和 15.4 及以上版本；媒体控制兼容性不作为录音识别主流程的阻断条件。
 - macOS 生成 `.app` 和 DMG，并对完整应用执行 ad-hoc 签名；正式分发可替换为 Developer ID 签名与公证。
 - GitHub Actions 支持 macOS ARM64 DMG、Windows x64 NSIS、Linux x64 AppImage/DEB 三个平台产物。
-- 推送 `v*` 标签或手动触发工作流进行发布构建。
+- 推送与应用版本一致的 `v*` 标签或手动填写发布标签后，GitHub Actions 在三个平台全部构建成功时自动创建或更新 GitHub Release。
+- Release 汇总 DMG、EXE、AppImage、DEB 和 `SHA256SUMS.txt`；任一平台失败时不得发布不完整版本。
