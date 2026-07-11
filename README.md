@@ -18,6 +18,20 @@
 
 完整产品行为与跨平台边界见 [产品与实现决策](docs/PRODUCT_DECISIONS.md)。
 
+## 火山引擎语音服务
+
+- 所需模块：豆包流式语音识别模型 2.0（小时版）。
+- Resource ID：`volc.seedasr.sauc.duration`。
+- API 模式：通过 WebSocket 调用 `bigmodel_nostream` 流式输入接口，地址为 `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream`。
+
+开通步骤：
+
+1. 进入[火山引擎豆包语音控制台](https://console.volcengine.com/speech/new/)，开通“豆包流式语音识别模型 2.0（小时版）”。
+2. 在控制台获取 App ID 和 Access Token。具体接口参数参见[大模型流式语音识别 API 文档](https://www.volcengine.com/docs/6561/1354869?lang=zh)。
+3. 在 JustTalk 的“语音服务”中填写凭据，点击“测试连接”，测试成功后保存服务设置。
+
+录音数据仅保存在内存中，以约 200 ms 的 PCM 分片直接发送至火山引擎 API；JustTalk 不在本地写入或保留录音文件。停止、取消或识别异常后，剩余的内存音频缓冲会被释放。
+
 ## 开发
 
 需要 Node.js 20+、Rust stable，以及对应平台的 Tauri 系统依赖。
