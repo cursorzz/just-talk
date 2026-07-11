@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Release tag matching the app version, for example v0.1.1
+        description: Release tag matching the app version, for example v0.1.2
         required: true
         type: string
   push:

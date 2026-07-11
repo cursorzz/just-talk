@@ -1,6 +1,6 @@
 [package]
 name = "just-talk-slim"
-version = "0.1.1"
+version = "0.1.2"
 description = "A lightweight global speech input app"
 authors = ["Just Talk contributors"]
 edition = "2024"

@@ -52,7 +52,7 @@ make verify    # 校验签名结构、DMG 和 SHA-256
 make clean     # 清理全部构建产物
 ```
 
-推送与应用版本一致的 `v*` 标签（例如版本 `0.1.1` 对应 `v0.1.1`），会生成 macOS ARM64 DMG、Windows x64 NSIS、Linux x64 AppImage/DEB，并在三个构建全部成功后自动创建 GitHub Release。Release 同时包含所有安装包和 `SHA256SUMS.txt`。
+推送与应用版本一致的 `v*` 标签（例如版本 `0.1.2` 对应 `v0.1.2`），会生成 macOS ARM64 DMG、Windows x64 NSIS、Linux x64 AppImage/DEB，并在三个构建全部成功后自动创建 GitHub Release。Release 同时包含所有安装包和 `SHA256SUMS.txt`。
 
 也可以在 GitHub Actions 中手动运行 `Build and release desktop installers`，并填写与 `package.json` 版本一致的发布标签。重复运行同一标签时会更新已有 Release 的安装包。
 
