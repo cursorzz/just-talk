@@ -40,6 +40,14 @@ make clean     # 清理全部构建产物
 
 推送 `v*` 标签或在 GitHub Actions 中手动运行 `Build desktop installers`，可生成 macOS ARM64 DMG、Windows x64 NSIS，以及 Linux x64 AppImage/DEB。
 
+### macOS 兼容性
+
+- 最低支持 macOS 12.0 Monterey。
+- 当前发布产物仅支持 Apple Silicon（ARM64），暂不提供 Intel Mac 安装包。
+- 录音、语音识别、快捷键和自动粘贴是稳定主流程。
+- “录音时暂停媒体”依赖 Apple 私有的 MediaRemote 接口。macOS 15.4 及以上通过 JXA 获取媒体状态，但该功能仍可能随系统升级或播放器实现变化而失效；媒体控制失败不会影响录音和识别。
+- 发布前重点验证 macOS 12、13、14、15.3 和 15.4 及以上版本。
+
 `make build` 会先让 Tauri 只生成 `.app`，然后对完整应用做 ad-hoc 签名，最后通过 `hdiutil` 创建 DMG。这避免了 Tauri 默认 DMG 脚本偶发无法卸载临时映像的问题。产物位于：
 
 ```text

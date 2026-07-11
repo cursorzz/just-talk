@@ -71,6 +71,8 @@
 ## 发布与构建
 
 - Makefile 是本地开发、测试和构建的统一入口。
+- macOS 最低支持 12.0 Monterey，当前发布产物仅支持 Apple Silicon（ARM64），暂不提供 Intel 安装包。
+- macOS 发布前重点验证 12、13、14、15.3 和 15.4 及以上版本；媒体控制兼容性不作为录音识别主流程的阻断条件。
 - macOS 生成 `.app` 和 DMG，并对完整应用执行 ad-hoc 签名；正式分发可替换为 Developer ID 签名与公证。
 - GitHub Actions 支持 macOS ARM64 DMG、Windows x64 NSIS、Linux x64 AppImage/DEB 三个平台产物。
 - 推送 `v*` 标签或手动触发工作流进行发布构建。
