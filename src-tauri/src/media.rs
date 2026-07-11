@@ -138,7 +138,7 @@ mod platform {
             let Ok(info) = session.GetPlaybackInfo() else {
                 continue;
             };
-            if token.source_ids.iter().any(|id| id == source_id.as_str())
+            if token.source_ids.iter().any(|id| source_id == id)
                 && info.PlaybackStatus() == Ok(PlaybackStatus::Paused)
             {
                 if let Ok(operation) = session.TryPlayAsync() {
