@@ -96,7 +96,6 @@ mod platform {
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use futures::executor::block_on;
     use windows::Media::Control::{
         GlobalSystemMediaTransportControlsSessionManager as SessionManager,
         GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus,
@@ -108,13 +107,13 @@ mod platform {
     }
 
     pub fn pause_current() -> Option<Token> {
-        let manager = block_on(SessionManager::RequestAsync().ok()?).ok()?;
+        let manager = SessionManager::RequestAsync().ok()?.join().ok()?;
         let sessions = manager.GetSessions().ok()?;
         let mut source_ids = Vec::new();
         for session in sessions {
             let status = session.GetPlaybackInfo().ok()?.PlaybackStatus().ok()?;
             if status == PlaybackStatus::Playing
-                && block_on(session.TryPauseAsync().ok()?).ok()? == true
+                && session.TryPauseAsync().ok()?.join().ok()? == true
             {
                 source_ids.push(session.SourceAppUserModelId().ok()?.to_string());
             }
@@ -126,7 +125,7 @@ mod platform {
         let Ok(operation) = SessionManager::RequestAsync() else {
             return;
         };
-        let Ok(manager) = block_on(operation) else {
+        let Ok(manager) = operation.join() else {
             return;
         };
         let Ok(sessions) = manager.GetSessions() else {
@@ -143,7 +142,7 @@ mod platform {
                 && info.PlaybackStatus() == Ok(PlaybackStatus::Paused)
             {
                 if let Ok(operation) = session.TryPlayAsync() {
-                    let _ = block_on(operation);
+                    let _ = operation.join();
                 }
             }
         }
