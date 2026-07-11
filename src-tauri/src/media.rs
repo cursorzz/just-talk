@@ -68,7 +68,8 @@ mod platform {
         let finder = PlayerFinder::new().ok()?;
         let mut bus_names = Vec::new();
         for player in finder.find_all().ok()? {
-            if player.get_playback_status() == Ok(PlaybackStatus::Playing) && player.pause().is_ok()
+            if matches!(player.get_playback_status(), Ok(PlaybackStatus::Playing))
+                && player.pause().is_ok()
             {
                 bus_names.push(player.bus_name().to_owned());
             }
@@ -85,7 +86,7 @@ mod platform {
         };
         for player in players {
             if token.bus_names.iter().any(|name| name == player.bus_name())
-                && player.get_playback_status() == Ok(PlaybackStatus::Paused)
+                && matches!(player.get_playback_status(), Ok(PlaybackStatus::Paused))
             {
                 let _ = player.play();
             }
