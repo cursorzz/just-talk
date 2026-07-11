@@ -1,0 +1,10 @@
+/node_modules
+/dist
+/src-tauri/target
+/src-tauri/gen/schemas
+/.cargo
+/.DS_Store
+*.log
+/just-talk
+/design-qa.md
+/design-qa-*.png
