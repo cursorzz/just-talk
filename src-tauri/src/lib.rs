@@ -185,6 +185,7 @@ fn hotkey_action(mode: &HotkeyMode, phase: &session::Phase, state: ShortcutState
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState {
             config: RwLock::new(config::load()),
             session: SessionManager::default(),

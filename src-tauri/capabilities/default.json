@@ -7,6 +7,13 @@
     "core:default",
     "core:window:allow-set-position",
     "core:window:allow-show",
-    "core:window:allow-hide"
+    "core:window:allow-hide",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://www.volcengine.com/docs/6561/*" },
+        { "url": "https://console.volcengine.com/speech/*" }
+      ]
+    }
   ]
 }

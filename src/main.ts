@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import "./styles.css";
 
 type AppConfig = {
@@ -115,7 +116,17 @@ document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
       </section>
 
       <section class="service-card" aria-labelledby="service-title">
-        <h2 id="service-title">语音服务</h2>
+        <div class="service-heading">
+          <div>
+            <h2 id="service-title">语音服务</h2>
+            <p>使用火山引擎「豆包流式语音识别模型 2.0（小时版）」</p>
+          </div>
+          <nav class="service-links" aria-label="火山引擎语音服务相关链接">
+            <a href="https://www.volcengine.com/docs/6561/1354869?lang=zh" data-external>API 文档</a>
+            <a href="https://console.volcengine.com/speech/new/" data-external>开通服务</a>
+          </nav>
+        </div>
+        <p class="service-note">请先在火山引擎控制台开通该模型，再填写 App ID 与 Access Token。录音音频直接发送至火山引擎 API，JustTalk 不在本地保存录音。</p>
         <div class="service-grid">
           <label><span>App ID</span><input id="app-id" autocomplete="off" required /></label>
           <label><span>Access Token</span><input id="access-token" type="password" autocomplete="off" required /></label>
@@ -170,6 +181,14 @@ let previousHotkey = "";
 let autoSaveQueue = Promise.resolve();
 let hotwordsSaveTimer: number | undefined;
 const autoSaveClearTimers = new Map<string, number>();
+
+document.querySelectorAll<HTMLAnchorElement>("a[data-external]").forEach((link) => {
+  link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    if (hasTauriBridge) await openUrl(link.href);
+    else window.open(link.href, "_blank", "noopener,noreferrer");
+  });
+});
 
 async function refreshPermissions(): Promise<boolean> {
   const status = await invoke<PermissionStatus>("permission_status");
