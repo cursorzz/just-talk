@@ -316,7 +316,7 @@ function beginHotkeyCapture() {
 
 $("change-hotkey").addEventListener("click", beginHotkeyCapture);
 
-$("change-hotkey").addEventListener("keydown", async (event) => {
+window.addEventListener("keydown", async (event) => {
   if (!capturingHotkey) return;
   event.preventDefault();
   event.stopPropagation();
@@ -347,7 +347,7 @@ $("change-hotkey").addEventListener("keydown", async (event) => {
     $("hotkey-status").textContent = String(error);
     $("hotkey-status").classList.add("failed");
   }
-});
+}, true);
 
 function appendDebug(entry: DebugEntry) {
   if (!input("debug-enabled").checked) return;
