@@ -330,8 +330,10 @@ async fn run_recognition(
         Clipboard::new()
             .and_then(|mut clipboard| clipboard.set_text(final_text.clone()))
             .map_err(|e| format!("写入剪贴板失败：{e}"))?;
-        if config.auto_paste {
-            paste_to_focused_app();
+        if config.auto_paste
+            && let Err(error) = paste_to_focused_app()
+        {
+            debug_emit(&app, &config, "error", "自动粘贴失败", error);
         }
     }
     let value = SessionSnapshot {
@@ -578,7 +580,7 @@ fn transition_to_recording(snapshot: &mut SessionSnapshot) -> bool {
     true
 }
 
-fn paste_to_focused_app() {
+fn paste_to_focused_app() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use objc2_core_graphics::{CGEvent, CGEventFlags, CGEventTapLocation};
@@ -591,20 +593,52 @@ fn paste_to_focused_app() {
             CGEvent::set_flags(Some(&up), CGEventFlags::MaskCommand);
             CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&down));
             CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&up));
+            return Ok(());
         }
+        Err("无法创建系统粘贴事件".into())
     }
     #[cfg(target_os = "linux")]
-    let _ = std::process::Command::new("sh").args(["-c", "command -v wtype >/dev/null && wtype -M ctrl v -m ctrl || xdotool key --clearmodifiers ctrl+v"]).spawn();
+    {
+        std::process::Command::new("sh")
+            .args(["-c", "command -v wtype >/dev/null && wtype -M ctrl v -m ctrl || xdotool key --clearmodifiers ctrl+v"])
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("启动系统粘贴命令失败：{error}"))
+    }
     #[cfg(target_os = "windows")]
-    let _ = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-WindowStyle",
-            "Hidden",
-            "-Command",
-            "$ws=New-Object -ComObject WScript.Shell; $ws.SendKeys('^v')",
-        ])
-        .spawn();
+    {
+        use std::mem::size_of;
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput, VK_CONTROL,
+            VK_V,
+        };
+
+        let keyboard = |key, flags| INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: key,
+                    dwFlags: flags,
+                    ..Default::default()
+                },
+            },
+        };
+        let inputs = [
+            keyboard(VK_CONTROL, Default::default()),
+            keyboard(VK_V, Default::default()),
+            keyboard(VK_V, KEYEVENTF_KEYUP),
+            keyboard(VK_CONTROL, KEYEVENTF_KEYUP),
+        ];
+        let sent = unsafe { SendInput(&inputs, size_of::<INPUT>() as i32) };
+        if sent == inputs.len() as u32 {
+            Ok(())
+        } else {
+            Err(format!(
+                "系统只发送了 {sent}/{} 个粘贴按键事件",
+                inputs.len()
+            ))
+        }
+    }
 }
 
 #[cfg(test)]
