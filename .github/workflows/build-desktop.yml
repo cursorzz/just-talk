@@ -37,10 +37,10 @@ jobs:
             runner: windows-latest
             rust_target: ""
             args: --bundles nsis
-          - name: Linux x64
+          - name: Debian x64
             runner: ubuntu-22.04
             rust_target: ""
-            args: --bundles appimage,deb
+            args: --bundles deb
 
     steps:
       - name: Check out repository
@@ -56,7 +56,6 @@ jobs:
             librsvg2-dev \
             libasound2-dev \
             libssl-dev \
-            libfuse2 \
             patchelf \
             xdg-utils
 
@@ -84,7 +83,7 @@ jobs:
         run: npm ci
 
       - name: Warm release cache
-        if: github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           npm run build
@@ -95,7 +94,7 @@ jobs:
           cargo build --release --manifest-path src-tauri/Cargo.toml "${target_args[@]}"
 
       - name: Build and upload installer
-        if: github.ref != 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch' || github.ref != 'refs/heads/main'
         uses: tauri-apps/tauri-action@v1
         env:
           APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
@@ -104,9 +103,72 @@ jobs:
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: justtalk-[platform]-[arch]-[bundle]
 
+  build-arch:
+    name: Arch Linux x64
+    runs-on: ubuntu-22.04
+    container: archlinux:base-devel
+    timeout-minutes: 60
+
+    steps:
+      - name: Install Arch build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git \
+            nodejs \
+            npm \
+            rustup \
+            webkit2gtk-4.1 \
+            libappindicator-gtk3 \
+            librsvg \
+            alsa-lib \
+            openssl \
+            patchelf \
+            xdg-utils
+          rustup default stable
+          useradd --create-home builder
+
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Cache npm downloads
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Cache Rust build output
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          shared-key: desktop-arch-linux-x86_64
+          add-job-id-key: "false"
+          cache-on-failure: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Arch binary
+        run: npm run tauri build -- --no-bundle
+
+      - name: Build Arch package
+        if: github.event_name == 'workflow_dispatch' || github.ref != 'refs/heads/main'
+        working-directory: packaging/arch
+        run: |
+          chown -R builder:builder .
+          runuser -u builder -- makepkg --noconfirm --nodeps --force
+
+      - name: Upload Arch package
+        if: github.event_name == 'workflow_dispatch' || github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: justtalk-linux-x64-arch
+          path: packaging/arch/*.pkg.tar.zst
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, build-arch]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     timeout-minutes: 15
@@ -158,7 +220,7 @@ jobs:
           while IFS= read -r -d '' file; do
             cp "$file" "release-files/$(basename "$file")"
           done < <(find release-assets -type f \( \
-            -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \
+            -name '*.dmg' -o -name '*.exe' -o -name '*.deb' -o -name '*.pkg.tar.zst' \
           \) -print0)
           if ! find release-files -type f -mindepth 1 -print -quit | grep -q .; then
             echo "No release installers were downloaded" >&2

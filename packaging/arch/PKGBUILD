@@ -1,0 +1,30 @@
+_project_root="$(cd "$startdir/../.." && pwd)"
+
+pkgname=justtalk
+pkgver="$(node -p "require('$_project_root/package.json').version")"
+pkgrel=1
+pkgdesc="Lightweight global speech input app"
+arch=('x86_64')
+url="https://github.com/cursorzz/just-talk"
+license=('custom')
+depends=(
+  'alsa-lib'
+  'libappindicator-gtk3'
+  'openssl'
+  'webkit2gtk-4.1'
+  'xdg-utils'
+)
+source=()
+sha256sums=()
+
+package() {
+  install -Dm755 \
+    "$_project_root/src-tauri/target/release/just-talk-slim" \
+    "$pkgdir/usr/bin/justtalk"
+  install -Dm644 \
+    "$startdir/justtalk.desktop" \
+    "$pkgdir/usr/share/applications/justtalk.desktop"
+  install -Dm644 \
+    "$_project_root/src-tauri/icons/icon.png" \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/justtalk.png"
+}

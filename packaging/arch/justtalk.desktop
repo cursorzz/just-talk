@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=JustTalk
+Comment=Lightweight global speech input app
+Exec=justtalk
+Icon=justtalk
+Terminal=false
+Categories=Utility;Audio;
