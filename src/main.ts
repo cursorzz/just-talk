@@ -386,7 +386,7 @@ function appendDebug(entry: DebugEntry) {
 
 function renderSession(value: SessionSnapshot) {
   snapshot = value;
-  const labels = { idle: "就绪", connecting: "正在聆听", recording: "正在聆听", processing: "正在整理", failed: "出现错误" };
+  const labels = { idle: "就绪", connecting: "正在聆听", recording: "正在聆听", processing: "处理中", failed: "出现错误" };
   const status = $("status");
   status.dataset.phase = value.phase;
   $("status-label").textContent = labels[value.phase];

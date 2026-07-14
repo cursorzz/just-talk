@@ -298,4 +298,18 @@ mod tests {
             HotkeyAction::Stop
         );
     }
+
+    #[test]
+    fn processing_ignores_repeated_hotkey_events() {
+        for mode in [HotkeyMode::Free, HotkeyMode::Normal] {
+            assert_eq!(
+                hotkey_action(&mode, &session::Phase::Processing, ShortcutState::Pressed),
+                HotkeyAction::Ignore
+            );
+            assert_eq!(
+                hotkey_action(&mode, &session::Phase::Processing, ShortcutState::Released,),
+                HotkeyAction::Ignore
+            );
+        }
+    }
 }

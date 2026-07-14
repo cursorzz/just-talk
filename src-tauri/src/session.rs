@@ -83,7 +83,8 @@ impl SessionManager {
         if config.app_id.trim().is_empty() || config.access_token.trim().is_empty() {
             return Err("请先填写 App ID 和 Access Token".into());
         }
-        if self.active.lock().is_some() {
+        let phase = self.snapshot.lock().phase.clone();
+        if !phase_allows_start(&phase) || self.active.lock().is_some() {
             return Ok(());
         }
         self.update(
@@ -580,6 +581,10 @@ fn transition_to_recording(snapshot: &mut SessionSnapshot) -> bool {
     true
 }
 
+fn phase_allows_start(phase: &Phase) -> bool {
+    matches!(phase, Phase::Idle | Phase::Failed)
+}
+
 fn paste_to_focused_app() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -643,7 +648,10 @@ fn paste_to_focused_app() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Phase, SessionSnapshot, audio_level, choose_final_text, transition_to_recording};
+    use super::{
+        Phase, SessionSnapshot, audio_level, choose_final_text, phase_allows_start,
+        transition_to_recording,
+    };
 
     #[test]
     fn finalizes_from_displayed_nostream_text_when_no_utterance_was_committed() {
@@ -673,5 +681,12 @@ mod tests {
 
         assert!(!transitioned);
         assert_eq!(snapshot.phase, Phase::Processing);
+    }
+
+    #[test]
+    fn processing_blocks_a_new_recognition_session() {
+        assert!(!phase_allows_start(&Phase::Processing));
+        assert!(phase_allows_start(&Phase::Idle));
+        assert!(phase_allows_start(&Phase::Failed));
     }
 }

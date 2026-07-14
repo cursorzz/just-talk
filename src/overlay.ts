@@ -49,18 +49,21 @@ async function render(snapshot: SessionSnapshot) {
   try {
     window.clearTimeout(failureTimer);
     capsule.dataset.phase = snapshot.phase;
-    if (snapshot.phase === "idle" || snapshot.phase === "processing") {
+    capsule.setAttribute("aria-busy", String(snapshot.phase === "processing"));
+    if (snapshot.phase === "idle") {
       await windowHandle.hide();
       return;
     }
     const content = {
       connecting: ["正在聆听", snapshot.hotkey_mode === "normal" ? "再次按下快捷键完成" : "松开快捷键完成"],
       recording: ["正在聆听", snapshot.partial || (snapshot.hotkey_mode === "normal" ? "再次按下快捷键完成" : "松开快捷键完成")],
+      processing: ["处理中", "正在等待完整识别结果"],
       failed: ["识别失败", snapshot.error || "请在主窗口查看详情"],
     }[snapshot.phase];
     if (!content) return;
     document.querySelector("#overlay-status")!.textContent = content[0];
     document.querySelector("#overlay-detail")!.textContent = content[1];
+    if (snapshot.phase === "processing") renderAudioLevel(0);
     await positionAtBottom();
     await windowHandle.show();
     if (snapshot.phase === "failed") failureTimer = window.setTimeout(() => void windowHandle.hide(), 3000);
