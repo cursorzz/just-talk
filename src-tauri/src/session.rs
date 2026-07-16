@@ -327,6 +327,7 @@ async fn run_recognition(
 
     let displayed = snapshot.lock().partial.clone();
     let final_text = choose_final_text(&committed, &displayed);
+    let mut final_error = None;
     if !final_text.is_empty() {
         Clipboard::new()
             .and_then(|mut clipboard| clipboard.set_text(final_text.clone()))
@@ -334,7 +335,8 @@ async fn run_recognition(
         if config.auto_paste
             && let Err(error) = paste_to_focused_app()
         {
-            debug_emit(&app, &config, "error", "自动粘贴失败", error);
+            debug_emit(&app, &config, "error", "自动粘贴失败", error.clone());
+            final_error = Some(error);
         }
     }
     let value = SessionSnapshot {
@@ -342,7 +344,7 @@ async fn run_recognition(
         hotkey_mode: config.hotkey_mode,
         partial: String::new(),
         final_text,
-        error: None,
+        error: final_error,
     };
     *snapshot.lock() = value.clone();
     let _ = app.emit("session-update", value);
@@ -604,11 +606,33 @@ fn paste_to_focused_app() -> Result<(), String> {
     }
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("sh")
-            .args(["-c", "command -v wtype >/dev/null && wtype -M ctrl v -m ctrl || xdotool key --clearmodifiers ctrl+v"])
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| format!("启动系统粘贴命令失败：{error}"))
+        let (program, arguments) = linux_paste_command(
+            std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+            std::env::var("WAYLAND_DISPLAY").ok().as_deref(),
+        );
+        let output = std::process::Command::new(program)
+            .args(arguments)
+            .output()
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    format!("自动粘贴需要安装 {program}")
+                } else {
+                    format!("执行自动粘贴命令 {program} 失败：{error}")
+                }
+            })?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            if stderr.is_empty() {
+                Err(format!(
+                    "自动粘贴命令 {program} 执行失败：{}",
+                    output.status
+                ))
+            } else {
+                Err(format!("自动粘贴命令 {program} 执行失败：{stderr}"))
+            }
+        }
     }
     #[cfg(target_os = "windows")]
     {
@@ -646,12 +670,38 @@ fn paste_to_focused_app() -> Result<(), String> {
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
+fn linux_paste_command(
+    session_type: Option<&str>,
+    wayland_display: Option<&str>,
+) -> (&'static str, &'static [&'static str]) {
+    if crate::hotkey::linux_backend(session_type, wayland_display)
+        == crate::hotkey::LinuxBackend::WaylandPortal
+    {
+        ("wtype", &["-M", "ctrl", "-k", "v", "-m", "ctrl"])
+    } else {
+        ("xdotool", &["key", "--clearmodifiers", "ctrl+v"])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Phase, SessionSnapshot, audio_level, choose_final_text, phase_allows_start,
-        transition_to_recording,
+        Phase, SessionSnapshot, audio_level, choose_final_text, linux_paste_command,
+        phase_allows_start, transition_to_recording,
     };
+
+    #[test]
+    fn chooses_linux_paste_tool_for_the_display_session() {
+        assert_eq!(
+            linux_paste_command(Some("wayland"), Some("wayland-0")),
+            ("wtype", &["-M", "ctrl", "-k", "v", "-m", "ctrl"][..])
+        );
+        assert_eq!(
+            linux_paste_command(Some("x11"), None),
+            ("xdotool", &["key", "--clearmodifiers", "ctrl+v"][..])
+        );
+    }
 
     #[test]
     fn finalizes_from_displayed_nostream_text_when_no_utterance_was_committed() {

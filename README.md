@@ -18,6 +18,12 @@
 
 完整产品行为与跨平台边界见 [产品与实现决策](docs/PRODUCT_DECISIONS.md)。
 
+### Linux 输入支持
+
+- X11 全局快捷键使用系统快捷键接口，自动粘贴依赖 `xdotool`。
+- Wayland 全局快捷键依赖桌面提供支持 GlobalShortcuts 的 `xdg-desktop-portal` 后端；自动粘贴依赖 `wtype`，并要求合成器支持 `virtual-keyboard-unstable-v1`。
+- 如果自动粘贴不可用，识别结果仍会写入系统剪贴板，可以手动粘贴。
+
 ## 火山引擎语音服务
 
 - 所需模块：豆包流式语音识别模型 2.0（小时版）。
@@ -52,7 +58,7 @@ make verify    # 校验签名结构、DMG 和 SHA-256
 make clean     # 清理全部构建产物
 ```
 
-推送与应用版本一致的 `v*` 标签（例如版本 `0.1.2` 对应 `v0.1.2`），会生成 macOS ARM64 DMG、Windows x64 NSIS、Linux x64 AppImage/DEB，并在三个构建全部成功后自动创建 GitHub Release。Release 同时包含所有安装包和 `SHA256SUMS.txt`。
+推送与应用版本一致的 `v*` 标签（例如版本 `0.1.2` 对应 `v0.1.2`），会生成 macOS ARM64 DMG、Windows x64 NSIS、Debian x64 DEB 和 Arch Linux x64 `pkg.tar.zst`，并在全部构建成功后自动创建 GitHub Release。Release 同时包含所有安装包和 `SHA256SUMS.txt`。
 
 也可以在 GitHub Actions 中手动运行 `Build and release desktop installers`，并填写与 `package.json` 版本一致的发布标签。重复运行同一标签时会更新已有 Release 的安装包。
 

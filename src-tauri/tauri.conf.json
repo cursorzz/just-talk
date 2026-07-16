@@ -55,6 +55,14 @@
     ],
     "category": "Productivity",
     "shortDescription": "轻量全局语音输入工具",
+    "linux": {
+      "deb": {
+        "recommends": ["wtype", "xdotool", "xdg-desktop-portal"],
+        "files": {
+          "/usr/share/applications/com.justtalk.slim.desktop": "../packaging/linux/com.justtalk.slim.desktop"
+        }
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "12.0",
       "infoPlist": "Info.plist"

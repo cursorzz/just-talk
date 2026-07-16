@@ -461,12 +461,21 @@ $("clear-debug").addEventListener("click", () => {
 });
 
 async function bootstrap() {
+  await listen<string>("hotkey-error", (event) => {
+    $("hotkey-status").textContent = event.payload;
+    $("hotkey-status").classList.add("failed");
+  });
+  await listen<SessionSnapshot>("session-update", (event) => renderSession(event.payload));
+  await listen<DebugEntry>("debug-entry", (event) => appendDebug(event.payload));
   await refreshPermissions();
   config = await invoke<AppConfig>("load_config");
   fillForm(config);
+  const hotkeyError = await invoke<string | null>("hotkey_status");
+  if (hotkeyError) {
+    $("hotkey-status").textContent = hotkeyError;
+    $("hotkey-status").classList.add("failed");
+  }
   renderSession(await invoke<SessionSnapshot>("session_snapshot"));
-  await listen<SessionSnapshot>("session-update", (event) => renderSession(event.payload));
-  await listen<DebugEntry>("debug-entry", (event) => appendDebug(event.payload));
 }
 
 if (hasTauriBridge) {

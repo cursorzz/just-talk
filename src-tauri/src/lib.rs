@@ -1,5 +1,6 @@
 mod audio;
 mod config;
+mod hotkey;
 mod media;
 mod permissions;
 mod protocol;
@@ -7,11 +8,11 @@ mod session;
 
 use parking_lot::RwLock;
 use tauri::{
-    AppHandle, Manager, State,
+    AppHandle, Emitter, Manager, State,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
 };
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 use config::{AppConfig, HotkeyMode};
 use permissions::PermissionStatus;
@@ -20,6 +21,8 @@ use session::{SessionManager, SessionSnapshot};
 struct AppState {
     config: RwLock<AppConfig>,
     session: SessionManager,
+    hotkey: hotkey::HotkeyManager,
+    hotkey_error: RwLock<Option<String>>,
 }
 
 #[tauri::command]
@@ -33,13 +36,25 @@ fn session_snapshot(state: State<'_, AppState>) -> SessionSnapshot {
 }
 
 #[tauri::command]
-fn permission_status(app: AppHandle, state: State<'_, AppState>) -> PermissionStatus {
+async fn permission_status(app: AppHandle) -> Result<PermissionStatus, String> {
+    let state = app.state::<AppState>();
     let status = permissions::status();
     let hotkey = state.config.read().hotkey.clone();
-    if status.all_granted && !app.global_shortcut().is_registered(hotkey.as_str()) {
-        let _ = register_shortcut(&app, &hotkey);
+    if status.all_granted && !state.hotkey.is_registered(&app, &hotkey).await {
+        match state.hotkey.register(&app, &hotkey).await {
+            Ok(()) => *state.hotkey_error.write() = None,
+            Err(error) => {
+                *state.hotkey_error.write() = Some(error.clone());
+                let _ = app.emit("hotkey-error", error);
+            }
+        }
     }
-    status
+    Ok(status)
+}
+
+#[tauri::command]
+fn hotkey_status(state: State<'_, AppState>) -> Option<String> {
+    state.hotkey_error.read().clone()
 }
 
 #[tauri::command]
@@ -77,11 +92,8 @@ async fn test_connection(app: AppHandle, config: AppConfig) -> Result<String, St
 }
 
 #[tauri::command]
-fn set_hotkey(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    hotkey: String,
-) -> Result<AppConfig, String> {
+async fn set_hotkey(app: AppHandle, hotkey: String) -> Result<AppConfig, String> {
+    let state = app.state::<AppState>();
     let hotkey = hotkey.trim().to_string();
     if hotkey.is_empty() {
         return Err("快捷键不能为空".into());
@@ -91,24 +103,31 @@ fn set_hotkey(
     }
     let old = state.config.read().clone();
     if old.hotkey == hotkey {
+        if !state.hotkey.is_registered(&app, &hotkey).await {
+            state
+                .hotkey
+                .register(&app, &hotkey)
+                .await
+                .map_err(|error| format!("快捷键可能已被占用或不受支持：{error}"))?;
+        }
+        *state.hotkey_error.write() = None;
         return Ok(old);
     }
 
-    register_shortcut(&app, &hotkey)
+    state
+        .hotkey
+        .replace(&app, &old.hotkey, &hotkey)
+        .await
         .map_err(|error| format!("快捷键可能已被占用或不受支持：{error}"))?;
-    if let Err(error) = app.global_shortcut().unregister(old.hotkey.as_str()) {
-        let _ = app.global_shortcut().unregister(hotkey.as_str());
-        return Err(format!("替换旧快捷键失败：{error}"));
-    }
 
     let mut updated = old.clone();
     updated.hotkey = hotkey.clone();
     if let Err(error) = config::save(&updated) {
-        let _ = app.global_shortcut().unregister(hotkey.as_str());
-        let _ = register_shortcut(&app, &old.hotkey);
+        let _ = state.hotkey.replace(&app, &hotkey, &old.hotkey).await;
         return Err(error);
     }
     *state.config.write() = updated.clone();
+    *state.hotkey_error.write() = None;
     Ok(updated)
 }
 
@@ -134,26 +153,21 @@ fn validate_config(config: &AppConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn register_shortcut(app: &AppHandle, hotkey: &str) -> Result<(), String> {
-    let handle = app.clone();
-    app.global_shortcut()
-        .on_shortcut(hotkey, move |_app, _shortcut, event| {
-            let state = handle.state::<AppState>();
-            let phase = state.session.snapshot().phase;
-            let mode = state.config.read().hotkey_mode.clone();
-            match hotkey_action(&mode, &phase, event.state) {
-                HotkeyAction::Start => {
-                    let _ = state
-                        .session
-                        .start(handle.clone(), state.config.read().clone());
-                }
-                HotkeyAction::Stop => {
-                    let _ = state.session.stop(&handle);
-                }
-                HotkeyAction::Ignore => {}
-            }
-        })
-        .map_err(|e| format!("注册快捷键失败：{e}"))
+fn dispatch_hotkey_event(app: &AppHandle, event: ShortcutState) {
+    let state = app.state::<AppState>();
+    let phase = state.session.snapshot().phase;
+    let mode = state.config.read().hotkey_mode.clone();
+    match hotkey_action(&mode, &phase, event) {
+        HotkeyAction::Start => {
+            let _ = state
+                .session
+                .start(app.clone(), state.config.read().clone());
+        }
+        HotkeyAction::Stop => {
+            let _ = state.session.stop(app);
+        }
+        HotkeyAction::Ignore => {}
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -189,12 +203,15 @@ pub fn run() {
         .manage(AppState {
             config: RwLock::new(config::load()),
             session: SessionManager::default(),
+            hotkey: hotkey::HotkeyManager::default(),
+            hotkey_error: RwLock::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             load_config,
             save_config,
             session_snapshot,
             permission_status,
+            hotkey_status,
             request_permission,
             open_permission_settings,
             start_recording,
@@ -207,7 +224,15 @@ pub fn run() {
             let handle = app.handle().clone();
             let hotkey = app.state::<AppState>().config.read().hotkey.clone();
             if permissions::status().all_granted {
-                register_shortcut(&handle, &hotkey)?;
+                tauri::async_runtime::spawn(async move {
+                    let state = handle.state::<AppState>();
+                    let result = state.hotkey.register(&handle, &hotkey).await;
+                    let error = result.err();
+                    *state.hotkey_error.write() = error.clone();
+                    if let Some(error) = error {
+                        let _ = handle.emit("hotkey-error", error);
+                    }
+                });
             }
 
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;

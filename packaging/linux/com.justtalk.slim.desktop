@@ -2,7 +2,7 @@
 Type=Application
 Name=JustTalk
 Comment=Lightweight global speech input app
-Exec=justtalk
+Exec=just-talk-slim
 Icon=justtalk
 Terminal=false
 Categories=Utility;Audio;
